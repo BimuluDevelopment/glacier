@@ -1,0 +1,143 @@
+@import 'tailwindcss';
+
+/*
+ * Every color, the radius and the fonts come from CSS variables that ThemeProvider sets from the
+ * admin's theme settings, so re-theming never needs a rebuild. These defaults match the "glacier"
+ * dark preset and avoid a flash before settings load.
+ */
+:root {
+  --sl-primary: #5ccfee;
+  --sl-primary-foreground: #03141c;
+  --sl-background: #0a1016;
+  --sl-surface: #101922;
+  --sl-surface-alt: #16222e;
+  --sl-border: #22323f;
+  --sl-text: #e4f1f8;
+  --sl-muted: #8aa1b1;
+  --sl-success: #22c55e;
+  --sl-warning: #f59e0b;
+  --sl-danger: #ef4444;
+  --sl-radius: 10px;
+  --sl-font: 'Inter';
+  --sl-mono: 'JetBrains Mono';
+  --sl-gap: 1rem;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-primary: var(--sl-primary);
+  --color-primary-foreground: var(--sl-primary-foreground);
+  --color-bg: var(--sl-background);
+  --color-surface: var(--sl-surface);
+  --color-surface-alt: var(--sl-surface-alt);
+  --color-border: var(--sl-border);
+  --color-text: var(--sl-text);
+  --color-muted: var(--sl-muted);
+  --color-success: var(--sl-success);
+  --color-warning: var(--sl-warning);
+  --color-danger: var(--sl-danger);
+  --radius-ui: var(--sl-radius);
+  --font-sans: var(--sl-font), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: var(--sl-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  background: var(--sl-background);
+  color: var(--sl-text);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-density='compact'] {
+  --sl-gap: 0.625rem;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--sl-primary) 35%, transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sl-border) transparent;
+}
+
+.xterm .xterm-viewport {
+  background-color: transparent !important;
+}
+
+/* Admin-written Markdown (pages, landing text, banners). */
+.sl-prose {
+  line-height: 1.7;
+}
+.sl-prose > * + * {
+  margin-top: 0.9em;
+}
+.sl-prose h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-top: 1.4em;
+}
+.sl-prose h2 {
+  font-size: 1.4rem;
+  font-weight: 650;
+  margin-top: 1.4em;
+}
+.sl-prose h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-top: 1.2em;
+}
+.sl-prose > :first-child {
+  margin-top: 0;
+}
+.sl-prose a {
+  color: var(--sl-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sl-prose ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}
+.sl-prose ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+}
+.sl-prose li + li {
+  margin-top: 0.25em;
+}
+.sl-prose blockquote {
+  border-left: 3px solid var(--sl-primary);
+  padding-left: 1em;
+  color: var(--sl-muted);
+}
+.sl-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--sl-surface-alt);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.sl-prose pre {
+  background: var(--sl-surface-alt);
+  border: 1px solid var(--sl-border);
+  border-radius: var(--sl-radius);
+  padding: 0.9em 1em;
+  overflow-x: auto;
+}
+.sl-prose pre code {
+  background: none;
+  padding: 0;
+}
+.sl-prose hr {
+  border-color: var(--sl-border);
+}
+.sl-prose img {
+  max-width: 100%;
+  border-radius: var(--sl-radius);
+}

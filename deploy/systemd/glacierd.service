@@ -1,0 +1,20 @@
+[Unit]
+Description=Glacier Panel node daemon (glacierd)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+# Root is required to talk to Docker and to hand server files to the container user (uid 988).
+User=root
+WorkingDirectory=/etc/glacier
+ExecStart=/usr/bin/node /opt/glacier/apps/daemon/dist/index.js --config /etc/glacier/config.yml
+Restart=always
+RestartSec=5
+# Game servers keep running when glacierd stops; it reattaches on start.
+KillMode=process
+LimitNOFILE=65536
+# No PrivateTmp: install scripts in /tmp/glacier are bind-mounted into installer containers.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,27 @@
+# Production database for the Glacier Panel.
+#   docker compose --env-file /etc/glacier/panel.env -f deploy/docker-compose.yml up -d
+#
+# Postgres is published on 127.0.0.1 only. Docker publishes ports past ufw/firewalld, so never
+# expose it on 0.0.0.0.
+name: glacier
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: glacier
+      POSTGRES_DB: glacier
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in /etc/glacier/panel.env}
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U glacier -d glacier']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

@@ -1,0 +1,563 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  rootAdmin    Boolean  @default(false)
+  language     String   @default("en")
+  totpSecret   String?
+  totpEnabled  Boolean  @default(false)
+  /// Last accepted TOTP time step, so a code cannot be replayed.
+  totpLastStep Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions       Session[]
+  servers        Server[]
+  subusers       Subuser[]
+  activity       ActivityLog[]
+  passwordResets PasswordReset[]
+  recoveryCodes  RecoveryCode[]
+  passkeys       Passkey[]
+  oauthAccounts  OAuthAccount[]
+  apiKeys        ApiKey[]
+}
+
+/// Browser sessions. The id is the SHA-256 of the cookie token, so a database leak does not leak sessions.
+model Session {
+  id         String   @id
+  userId     String
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// One row per settings section (see packages/shared/src/settings.ts).
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Location {
+  id        Int      @id @default(autoincrement())
+  short     String   @unique
+  long      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  nodes Node[]
+}
+
+model Node {
+  id                 Int       @id @default(autoincrement())
+  uuid               String    @unique @default(uuid())
+  name               String
+  description        String?
+  locationId         Int
+  fqdn               String
+  scheme             String    @default("https")
+  behindProxy        Boolean   @default(false)
+  public             Boolean   @default(true)
+  maintenance        Boolean   @default(false)
+  daemonPort         Int       @default(8080)
+  sftpPort           Int       @default(2022)
+  /// MiB
+  memory             Int
+  /// Percent, -1 disables the check
+  memoryOverallocate Int       @default(0)
+  /// MiB
+  disk               Int
+  diskOverallocate   Int       @default(0)
+  /// MiB
+  uploadSize         Int       @default(100)
+  dataDirectory      String    @default("/var/lib/glacier/volumes")
+  /// AES-256-GCM encrypted shared secret, set when the daemon pairs.
+  secretEncrypted    String?
+  /// SHA-256 of the one-time pairing token.
+  pairingTokenHash   String?   @unique
+  pairingExpiresAt   DateTime?
+  pairedAt           DateTime?
+  lastSeenAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  location      Location       @relation(fields: [locationId], references: [id])
+  allocations   Allocation[]
+  servers       Server[]
+  databaseHosts DatabaseHost[]
+}
+
+model Allocation {
+  id        Int      @id @default(autoincrement())
+  nodeId    Int
+  ip        String
+  ipAlias   String?
+  port      Int
+  notes     String?
+  serverId  Int?
+  createdAt DateTime @default(now())
+
+  node          Node    @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  server        Server? @relation("ServerAllocations", fields: [serverId], references: [id], onDelete: SetNull)
+  primaryServer Server? @relation("PrimaryAllocation")
+
+  @@unique([nodeId, ip, port])
+  @@index([serverId])
+}
+
+model Nest {
+  id          Int      @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  eggs Egg[]
+}
+
+model Egg {
+  id                Int      @id @default(autoincrement())
+  uuid              String   @unique @default(uuid())
+  nestId            Int
+  name              String
+  author            String
+  description       String?
+  features          String[]
+  /// { "<label>": "<image>" }, first entry is the default
+  dockerImages      Json
+  fileDenylist      String[]
+  startup           String
+  /// Egg `config.files` block
+  configFiles       Json
+  startupDone       String[]
+  stopCommand       String
+  installScript     String
+  installContainer  String
+  installEntrypoint String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  nest      Nest             @relation(fields: [nestId], references: [id], onDelete: Restrict)
+  variables EggVariable[]
+  servers   Server[]
+  templates ServerTemplate[]
+}
+
+model EggVariable {
+  id           Int     @id @default(autoincrement())
+  eggId        Int
+  name         String
+  description  String  @default("")
+  envVariable  String
+  defaultValue String  @default("")
+  userViewable Boolean @default(true)
+  userEditable Boolean @default(true)
+  rules        String  @default("nullable|string")
+  sort         Int     @default(0)
+
+  egg    Egg              @relation(fields: [eggId], references: [id], onDelete: Cascade)
+  values ServerVariable[]
+
+  @@unique([eggId, envVariable])
+}
+
+enum ServerStatus {
+  INSTALLING
+  INSTALL_FAILED
+  REINSTALL_FAILED
+  ACTIVE
+  SUSPENDED
+}
+
+model Server {
+  id              Int          @id @default(autoincrement())
+  uuid            String       @unique @default(uuid())
+  /// First 8 characters of the uuid, used in URLs
+  shortId         String       @unique
+  name            String
+  description     String?
+  status          ServerStatus @default(INSTALLING)
+  ownerId         String
+  nodeId          Int
+  eggId           Int
+  allocationId    Int          @unique
+  /// MiB
+  memory          Int
+  swap            Int          @default(0)
+  /// MiB
+  disk            Int
+  io              Int          @default(500)
+  /// Percent of one core
+  cpu             Int          @default(0)
+  threads         String?
+  oomKiller       Boolean      @default(true)
+  image           String
+  startup         String
+  databaseLimit   Int          @default(0)
+  allocationLimit Int          @default(0)
+  backupLimit     Int          @default(0)
+  installedAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  owner       User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  node        Node              @relation(fields: [nodeId], references: [id], onDelete: Restrict)
+  egg         Egg               @relation(fields: [eggId], references: [id], onDelete: Restrict)
+  allocation  Allocation        @relation("PrimaryAllocation", fields: [allocationId], references: [id], onDelete: Restrict)
+  allocations Allocation[]      @relation("ServerAllocations")
+  variables   ServerVariable[]
+  subusers    Subuser[]
+  activity    ActivityLog[]
+  backups     Backup[]
+  schedules   Schedule[]
+  databases   ServerDatabase[]
+  plugins     InstalledPlugin[]
+  subdomains  Subdomain[]
+
+  @@index([ownerId])
+  @@index([nodeId])
+}
+
+model ServerVariable {
+  id         Int    @id @default(autoincrement())
+  serverId   Int
+  variableId Int
+  value      String
+
+  server   Server      @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  variable EggVariable @relation(fields: [variableId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, variableId])
+}
+
+model Subuser {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  serverId    Int
+  permissions String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serverId])
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  event      String
+  actorId    String?
+  serverId   Int?
+  ip         String?
+  properties Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  actor  User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  server Server? @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([actorId, createdAt])
+  @@index([serverId, createdAt])
+  @@index([event])
+}
+
+model Backup {
+  id           Int       @id @default(autoincrement())
+  uuid         String    @unique @default(uuid())
+  serverId     Int
+  name         String
+  /// Gitignore-style patterns, one per line
+  ignoredFiles String    @default("")
+  isSuccessful Boolean   @default(false)
+  isLocked     Boolean   @default(false)
+  checksum     String?
+  bytes        BigInt    @default(0)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId])
+}
+
+model Schedule {
+  id             Int       @id @default(autoincrement())
+  serverId       Int
+  name           String
+  cronMinute     String    @default("*/5")
+  cronHour       String    @default("*")
+  cronDayOfMonth String    @default("*")
+  cronMonth      String    @default("*")
+  cronDayOfWeek  String    @default("*")
+  isActive       Boolean   @default(true)
+  /// Skip the run when the server is not running
+  onlyWhenOnline Boolean   @default(false)
+  isProcessing   Boolean   @default(false)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  server Server         @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  tasks  ScheduleTask[]
+
+  @@index([isActive, nextRunAt])
+}
+
+model ScheduleTask {
+  id                Int      @id @default(autoincrement())
+  scheduleId        Int
+  sequence          Int
+  /// command | power | backup
+  action            String
+  payload           String   @default("")
+  /// Seconds to wait before this task runs
+  timeOffset        Int      @default(0)
+  continueOnFailure Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  schedule Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, sequence])
+}
+
+/// A MySQL/MariaDB server the panel creates per-server databases on.
+model DatabaseHost {
+  id                Int      @id @default(autoincrement())
+  name              String
+  host              String
+  port              Int      @default(3306)
+  username          String
+  passwordEncrypted String
+  maxDatabases      Int?
+  /// Prefer this host for servers on this node
+  nodeId            Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  node      Node?            @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  databases ServerDatabase[]
+}
+
+model ServerDatabase {
+  id                Int      @id @default(autoincrement())
+  serverId          Int
+  databaseHostId    Int
+  database          String
+  username          String
+  /// Hosts allowed to connect, MySQL syntax ("%" = anywhere)
+  remote            String   @default("%")
+  passwordEncrypted String
+  maxConnections    Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  server Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  host   DatabaseHost @relation(fields: [databaseHostId], references: [id], onDelete: Restrict)
+
+  @@unique([databaseHostId, database])
+  @@index([serverId])
+}
+
+/// Admin-written pages (terms, privacy, rules, ...) served at /p/<slug>.
+model Page {
+  id           Int      @id @default(autoincrement())
+  slug         String   @unique
+  title        String
+  /// Markdown
+  content      String   @default("")
+  published    Boolean  @default(false)
+  showInFooter Boolean  @default(false)
+  sort         Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// One-time password reset links. Only the SHA-256 of the token is stored.
+model PasswordReset {
+  id        Int       @id @default(autoincrement())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Unused TOTP recovery codes. Only hashes are stored; each works once.
+model RecoveryCode {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  codeHash  String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// WebAuthn credentials (passkeys / security keys).
+model Passkey {
+  id         String    @id
+  userId     String
+  name       String
+  publicKey  Bytes
+  counter    BigInt    @default(0)
+  transports String[]
+  deviceType String    @default("singleDevice")
+  backedUp   Boolean   @default(false)
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// A social login linked to a panel account.
+model OAuthAccount {
+  id             Int      @id @default(autoincrement())
+  userId         String
+  provider       String
+  providerUserId String
+  email          String?
+  displayName    String?
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@unique([userId, provider])
+}
+
+/// Personal API keys. Token: glacier_<identifier>_<secret>; only the secret's hash is stored.
+model ApiKey {
+  id         Int       @id @default(autoincrement())
+  userId     String
+  identifier String    @unique
+  secretHash String
+  name       String
+  /// client:read, client:write, admin:read, admin:write
+  scopes     String[]
+  /// Empty = any address. IPs or CIDR ranges.
+  allowedIps String[]
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Webhook {
+  id              Int       @id @default(autoincrement())
+  name            String
+  url             String
+  /// json = signed JSON payload, discord = Discord embed
+  format          String    @default("json")
+  secretEncrypted String
+  /// Activity event patterns, e.g. "server:power.*", "auth:login.failed", "*"
+  events          String[]
+  enabled         Boolean   @default(true)
+  lastStatus      Int?
+  lastError       String?
+  lastTriggeredAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Announcement {
+  id        Int       @id @default(autoincrement())
+  title     String
+  /// Markdown
+  body      String    @default("")
+  tone      String    @default("primary")
+  active    Boolean   @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+/// Plugins/mods installed through the panel, so updates can be checked.
+model InstalledPlugin {
+  id          Int      @id @default(autoincrement())
+  serverId    Int
+  /// modrinth | hangar | curseforge
+  source      String
+  projectId   String
+  versionId   String
+  name        String
+  versionName String
+  /// Path inside the server, e.g. "plugins/LuckPerms-Bukkit-5.5.71.jar"
+  path        String
+  iconUrl     String?
+  installedAt DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, source, projectId])
+  @@index([serverId])
+}
+
+/// A Cloudflare DNS name pointing at a server.
+model Subdomain {
+  id          Int      @id @default(autoincrement())
+  serverId    Int
+  /// Full name, e.g. "survival.play.example.com"
+  hostname    String   @unique
+  zoneId      String
+  recordId    String
+  srvRecordId String?
+  createdAt   DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId])
+}
+
+/// Presets admins pick when creating servers.
+model ServerTemplate {
+  id              Int      @id @default(autoincrement())
+  name            String
+  description     String   @default("")
+  eggId           Int
+  image           String?
+  memory          Int
+  swap            Int      @default(0)
+  disk            Int
+  cpu             Int      @default(0)
+  io              Int      @default(500)
+  databaseLimit   Int      @default(0)
+  allocationLimit Int      @default(0)
+  backupLimit     Int      @default(0)
+  /// Egg variable values
+  environment     Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  egg Egg @relation(fields: [eggId], references: [id], onDelete: Cascade)
+}

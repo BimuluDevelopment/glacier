@@ -1,0 +1,20 @@
+[Unit]
+Description=Glacier Panel API
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=glacier-panel
+Group=glacier-panel
+WorkingDirectory=/opt/glacier/apps/api
+EnvironmentFile=/etc/glacier/panel.env
+ExecStart=/usr/bin/node /opt/glacier/apps/api/dist/index.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

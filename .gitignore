@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.vite/
+apps/daemon/data/
+apps/daemon/config.yml
+playwright-report/
+test-results/
