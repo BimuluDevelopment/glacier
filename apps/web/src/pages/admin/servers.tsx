@@ -9,6 +9,8 @@ import { Alert, Button, Card, EmptyState, Field, Input, PageHeader, PageLoader, 
 import { useNodes } from './nodes';
 import { useNests, type EggDetail } from './eggs';
 import { useTemplates, type ServerTemplate } from './templates';
+import { proxyType } from '@glacier/shared';
+import { ServerLogo } from '../../components/ServerLogo';
 
 interface AdminServerRow {
   id: number;
@@ -16,6 +18,7 @@ interface AdminServerRow {
   shortId: string;
   name: string;
   status: ServerStatus;
+  iconVersion: number;
   memory: number;
   disk: number;
   cpu: number;
@@ -60,11 +63,16 @@ export function ServersPage() {
             {data.data.map((s) => (
               <tr key={s.id} className="hover:bg-surface-alt/50">
                 <Td>
-                  <Link to={`/admin/servers/${s.id}`} className="font-medium hover:text-primary">
-                    {s.name}
-                  </Link>
-                  <div className="font-mono text-xs text-muted">
-                    {s.shortId} · {s.egg.name}
+                  <div className="flex items-center gap-3">
+                    <ServerLogo server={{ id: s.shortId, name: s.name, iconVersion: s.iconVersion }} size="sm" />
+                    <div className="min-w-0">
+                      <Link to={`/admin/servers/${s.id}`} className="font-medium hover:text-primary">
+                        {s.name}
+                      </Link>
+                      <div className="font-mono text-xs text-muted">
+                        {s.shortId} · {s.egg.name}
+                      </div>
+                    </div>
                   </div>
                 </Td>
                 <Td>{s.owner.username}</Td>
@@ -383,6 +391,10 @@ interface AdminServerDetail extends AdminServerRow {
   databaseLimit: number;
   allocationLimit: number;
   backupLimit: number;
+  networkServerLimit: number;
+  networkMemoryLimit: number;
+  networkDiskLimit: number;
+  networkCpuLimit: number;
   installedAt: string | null;
 }
 
@@ -407,7 +419,7 @@ export function ServerDetailPage() {
 
   const [build, setBuild] = useState<Record<string, string>>({});
   useEffect(() => {
-    if (s) setBuild({ memory: String(s.memory), swap: String(s.swap), disk: String(s.disk), cpu: String(s.cpu), io: String(s.io), databaseLimit: String(s.databaseLimit), allocationLimit: String(s.allocationLimit), backupLimit: String(s.backupLimit) });
+    if (s) setBuild({ memory: String(s.memory), swap: String(s.swap), disk: String(s.disk), cpu: String(s.cpu), io: String(s.io), databaseLimit: String(s.databaseLimit), allocationLimit: String(s.allocationLimit), backupLimit: String(s.backupLimit), networkServerLimit: String(s.networkServerLimit), networkMemoryLimit: String(s.networkMemoryLimit), networkDiskLimit: String(s.networkDiskLimit), networkCpuLimit: String(s.networkCpuLimit) });
   }, [s]);
   const saveBuild = useMutation({
     mutationFn: () => api.patch(`/admin/servers/${id}/build`, Object.fromEntries(Object.entries(build).map(([k, val]) => [k, Number(val)]))),
@@ -508,6 +520,26 @@ export function ServerDetailPage() {
             {saveBuild.isSuccess && <span className="text-sm text-success">Saved and synced to the node.</span>}
           </div>
         </Card>
+        {proxyType(s.egg.name) && (
+          <Card title="Proxy network" className="lg:col-span-2">
+            <p className="mb-4 text-sm text-muted">
+              What the owner may add to this proxy&apos;s network themselves from its Proxy tab. 0 servers means only admins can add servers; 0 memory, disk or CPU means no extra limit (the
+              node&apos;s capacity still applies). Saved with <em>Save limits</em> above.
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                ['networkServerLimit', 'Servers'],
+                ['networkMemoryLimit', 'Memory in total (MiB)'],
+                ['networkDiskLimit', 'Disk in total (MiB)'],
+                ['networkCpuLimit', 'CPU in total (%)'],
+              ].map(([k, label]) => (
+                <Field key={k} label={label!}>
+                  {(fid) => <Input id={fid} type="number" min={0} value={build[k!] ?? ''} onChange={(e) => setBuild((b) => ({ ...b, [k!]: e.target.value }))} />}
+                </Field>
+              ))}
+            </div>
+          </Card>
+        )}
         <Card title="Danger zone" className="border-danger/40 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="text-sm text-muted">Deleting removes the container and every file of this server from the node.</p>

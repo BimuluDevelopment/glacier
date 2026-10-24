@@ -11,13 +11,18 @@ export const POWER_ACTIONS: PowerAction[] = ['start', 'stop', 'restart', 'kill']
 
 export type ProcessState = 'offline' | 'starting' | 'running' | 'stopping';
 
-export type ConfigFileParser = 'properties' | 'json' | 'yaml' | 'ini' | 'file';
+export type ConfigFileParser = 'properties' | 'json' | 'yaml' | 'ini' | 'toml' | 'file';
 
 export interface ConfigFileReplacement {
   /** Key path (dot-separated for json/yaml, plain key for properties/ini, line prefix for `file`). */
   match: string;
   /** Value with panel-side templates already resolved. `{{env.X}}` placeholders are resolved by the daemon. */
   replaceWith: string;
+  /**
+   * A structured value (list, map) for json/yaml/toml, used instead of `replaceWith`. For toml, a map
+   * with a plain table name as `match` replaces that whole table.
+   */
+  value?: unknown;
 }
 
 export interface ConfigFile {

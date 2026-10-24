@@ -59,7 +59,7 @@ export const SERVER_PERMISSIONS = {
   },
   settings: {
     description: 'Server settings',
-    keys: { rename: 'Rename the server', reinstall: 'Reinstall the server' },
+    keys: { rename: 'Rename the server', reinstall: 'Reinstall the server', icon: 'Change the server logo' },
   },
   allocation: {
     description: 'Network allocations',
@@ -80,6 +80,10 @@ export const SERVER_PERMISSIONS = {
   subdomain: {
     description: 'Subdomains',
     keys: { manage: 'Add and remove subdomains for this server' },
+  },
+  network: {
+    description: 'Proxy network',
+    keys: { read: 'See the servers in this proxy network', manage: 'Add, link, change and remove servers in this proxy network' },
   },
 } as const;
 

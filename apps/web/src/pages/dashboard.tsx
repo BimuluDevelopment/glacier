@@ -7,6 +7,7 @@ import type { ServerResourceUsage } from '@glacier/shared';
 import { api, type Paged } from '../lib/api';
 import { formatBytes, formatMiB } from '../lib/format';
 import type { ClientServerSummary } from '../lib/types';
+import { ServerLogo } from '../components/ServerLogo';
 import { useAuth } from '../auth/AuthProvider';
 import { useTheme } from '../theme/ThemeProvider';
 import { Markdown, useT } from '../theme/i18n';
@@ -97,6 +98,23 @@ function Stat({ icon, label, value, limit }: { icon: React.ReactNode; label: str
   );
 }
 
+/** Where players connect; servers behind a proxy are reached through it. */
+function ServerAddress({ server }: { server: ClientServerSummary }) {
+  if (server.network) {
+    return (
+      <span className="font-sans">
+        via {server.network.proxyName}
+        {server.network.name && <span className="font-mono"> · {server.network.name}</span>}
+      </span>
+    );
+  }
+  return (
+    <>
+      {server.address.ip}:{server.address.port}
+    </>
+  );
+}
+
 function ServerCard({ server }: { server: ClientServerSummary }) {
   const { branding } = useTheme();
   const opts = branding.dashboard;
@@ -108,11 +126,14 @@ function ServerCard({ server }: { server: ClientServerSummary }) {
       className="group flex flex-col gap-4 rounded-ui border border-border bg-surface p-5 transition hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate font-semibold group-hover:text-primary">{server.name}</h3>
-          <p className="mt-0.5 truncate font-mono text-xs text-muted">
-            {server.address.ip}:{server.address.port}
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <ServerLogo server={server} />
+          <div className="min-w-0">
+            <h3 className="truncate font-semibold group-hover:text-primary">{server.name}</h3>
+            <p className="mt-0.5 truncate font-mono text-xs text-muted">
+              <ServerAddress server={server} />
+            </p>
+          </div>
         </div>
         <StatusBadge server={server} usage={usage} />
       </div>
@@ -139,10 +160,11 @@ function ServerRow({ server }: { server: ClientServerSummary }) {
   const { data: usage } = useResources(server, opts.showResources);
   return (
     <Link to={`/server/${server.id}`} className="flex flex-wrap items-center gap-x-6 gap-y-1 px-5 py-3 transition hover:bg-surface-alt/60">
+      <ServerLogo server={server} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">{server.name}</div>
         <div className="truncate font-mono text-xs text-muted">
-          {server.address.ip}:{server.address.port}
+          <ServerAddress server={server} />
           {opts.showEgg && <span className="font-sans"> · {server.egg}</span>}
           {opts.showNode && <span className="font-sans"> · {server.node}</span>}
         </div>

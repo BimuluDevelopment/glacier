@@ -372,6 +372,25 @@ These let users give a server an address like `survival.play.example.com` instea
 
 Users then add subdomains from their server's **Network** tab.
 
+## Minecraft networks (Velocity, BungeeCord, Waterfall)
+
+A proxy links several Minecraft servers into one network: players join one address and move between servers such as `lobby` and `survival` with `/server <name>`.
+
+1. Installs from before this feature need the proxy eggs. Under **Admin → Eggs**, click the button that adds the bundled eggs; this adds **Velocity**, **BungeeCord** and **Waterfall**.
+2. Create a server with the **Velocity** egg and a public port, e.g. 25565. Velocity is the recommended proxy.
+3. Open the new server's **Proxy** tab and click **Add server**. Each server you add:
+   - runs on the same machine, behind the proxy;
+   - gets a port that only listens on the machine itself (30000–30999), so players can't skip the proxy;
+   - has player forwarding set up for you: Velocity's signed forwarding, or IP forwarding for BungeeCord and Waterfall;
+   - is added to the proxy's server list. The proxy reloads straight away if it's running.
+4. From the same tab, choose which servers players join first, change the order, and set **forced hosts**, e.g. `survival.example.com` going straight to `survival`.
+
+**Link existing** adds a Paper server you already have on that machine. Restart it afterwards so it picks up the forwarding settings.
+
+Server owners who aren't admins can add servers to their own proxy once you allow it. Set the limits (servers, memory, disk, CPU) in the **Proxy network** card on the proxy's page under **Admin → Servers**.
+
+> BungeeCord and Waterfall don't sign the player details they forward. Players can only reach the network through the proxy, but other servers on the same machine could still connect to a backend directly. Use Velocity, or install BungeeGuard, if you host servers for other people on that machine.
+
 ## MySQL databases for game servers
 
 Plugins like LuckPerms or CoreProtect want a MySQL database. To let users create one from their server's **Databases** tab, install MariaDB on a node and add it as a database host:

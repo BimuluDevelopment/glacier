@@ -31,6 +31,7 @@ export const clientServerRoutes: FastifyPluginAsync = async (app) => {
           allocation: { select: { ip: true, ipAlias: true, port: true } },
           node: { select: { name: true, fqdn: true } },
           egg: { select: { name: true } },
+          proxy: { select: { name: true } },
         },
         ...paginate(query),
       }),
@@ -43,10 +44,12 @@ export const clientServerRoutes: FastifyPluginAsync = async (app) => {
         name: s.name,
         description: s.description,
         status: s.status,
+        iconVersion: s.iconVersion,
         isOwner: s.ownerId === user.id,
         node: s.node.name,
         egg: s.egg.name,
         address: { ip: s.allocation.ipAlias ?? s.allocation.ip, port: s.allocation.port },
+        network: s.proxy ? { proxyName: s.proxy.name, name: s.networkName } : null,
         limits: { memory: s.memory, disk: s.disk, cpu: s.cpu },
       })),
       total,
@@ -63,6 +66,7 @@ export const clientServerRoutes: FastifyPluginAsync = async (app) => {
         allocation: true,
         allocations: { orderBy: { port: 'asc' } },
         egg: { select: { name: true, features: true, dockerImages: true } },
+        proxy: { select: { shortId: true, name: true } },
       },
     });
     return {
@@ -71,6 +75,9 @@ export const clientServerRoutes: FastifyPluginAsync = async (app) => {
       name: server.name,
       description: server.description,
       status: server.status,
+      iconVersion: server.iconVersion,
+      // The proxy network this server is part of, if any.
+      network: full.proxy ? { proxyId: full.proxy.shortId, proxyName: full.proxy.name, name: server.networkName } : null,
       isOwner: server.ownerId === req.user!.id,
       permissions,
       node: { name: server.node.name, fqdn: server.node.fqdn, sftpPort: server.node.sftpPort },

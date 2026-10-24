@@ -16,6 +16,7 @@ import { UsersTab } from './pages/server/users';
 import { DatabasesTab } from './pages/server/databases';
 import { PluginsTab } from './pages/server/plugins';
 import { PlayersTab } from './pages/server/players';
+import { ProxyTab } from './pages/server/proxy';
 import { ActivityTab, NetworkTab, SettingsTab, StartupTab } from './pages/server/manage';
 import { DatabaseHostsPage } from './pages/admin/database-hosts';
 import { LandingBuilderPage } from './pages/admin/landing';
@@ -109,6 +110,7 @@ export function App() {
           <Route path="activity" element={<ActivityTab />} />
           <Route path="plugins" element={<PluginsTab />} />
           <Route path="players" element={<PlayersTab />} />
+          <Route path="proxy" element={<ProxyTab />} />
         </Route>
         <Route path="account" element={<AccountPage />} />
         <Route path="admin" element={<RequireAdmin><AdminShell /></RequireAdmin>}>

@@ -2,8 +2,10 @@ import { NavLink, Outlet, useParams } from 'react-router';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { ArrowLeft } from 'lucide-react';
-import type { ServerPermission, StringKey } from '@glacier/shared';
+import { ArrowLeft, Network } from 'lucide-react';
+import { proxyType, type ServerPermission, type StringKey } from '@glacier/shared';
+import { ServerLogo } from '../../components/ServerLogo';
+import { isMinecraft } from '../../lib/minecraft';
 import { useT } from '../../theme/i18n';
 import { useTheme } from '../../theme/ThemeProvider';
 import { api } from '../../lib/api';
@@ -20,7 +22,7 @@ const TABS: { to: string; label: StringKey; permission: ServerPermission | Serve
   { to: 'backups', label: 'server.tab.backups', permission: 'backup.read' },
   { to: 'network', label: 'server.tab.network', permission: 'allocation.read' },
   { to: 'startup', label: 'server.tab.startup', permission: 'startup.read' },
-  { to: 'settings', label: 'server.tab.settings', permission: ['settings.rename', 'settings.reinstall', 'file.sftp'] },
+  { to: 'settings', label: 'server.tab.settings', permission: ['settings.rename', 'settings.reinstall', 'settings.icon', 'file.sftp'] },
   { to: 'activity', label: 'server.tab.activity', permission: 'activity.read' },
 ];
 
@@ -29,7 +31,17 @@ const MINECRAFT_TABS: typeof TABS = [
   { to: 'plugins', label: 'server.tab.plugins', permission: 'plugins.read' },
   { to: 'players', label: 'server.tab.players', permission: 'players.read' },
 ];
-const isMinecraft = (eggName: string) => /minecraft|paper|purpur|spigot|bukkit|fabric|forge|quilt|folia|velocity/i.test(eggName);
+const PROXY_TAB: (typeof TABS)[number] = { to: 'proxy', label: 'server.tab.proxy', permission: 'network.read' };
+
+function tabsFor(eggName: string, features: { plugins: boolean; networks: boolean }): typeof TABS {
+  if (proxyType(eggName)) {
+    // Proxies have no world or players of their own; their tab lists the servers behind them.
+    const extra = [...(features.networks ? [PROXY_TAB] : []), ...(features.plugins ? [MINECRAFT_TABS[0]!] : [])];
+    return [TABS[0]!, ...extra, TABS[1]!, ...TABS.slice(2)];
+  }
+  if (!isMinecraft(eggName)) return TABS;
+  return [TABS[0]!, TABS[1]!, ...MINECRAFT_TABS.filter((tab) => tab.to !== 'plugins' || features.plugins), ...TABS.slice(2)];
+}
 
 export function ServerLayout() {
   const { id = '' } = useParams();
@@ -45,9 +57,7 @@ export function ServerLayout() {
   if (error || !server) return <Alert>{(error as Error)?.message ?? 'Server not found.'}</Alert>;
 
   const ctx = makeServerContext(server);
-  const available = isMinecraft(server.egg.name)
-    ? [TABS[0]!, TABS[1]!, ...MINECRAFT_TABS.filter((tab) => tab.to !== 'plugins' || branding.features.plugins), ...TABS.slice(2)]
-    : TABS;
+  const available = tabsFor(server.egg.name, branding.features);
   const tabs = available.filter((t) => (Array.isArray(t.permission) ? t.permission.some(ctx.can) : ctx.can(t.permission)));
   const primary = server.allocations.find((a) => a.primary);
 
@@ -57,15 +67,36 @@ export function ServerLayout() {
         <Link to="/" className="mb-2 inline-flex items-center gap-1 text-sm text-muted hover:text-text">
           <ArrowLeft className="size-3.5" /> Servers
         </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{server.name}</h1>
-          {server.status !== 'ACTIVE' && <ServerStatusBadge status={server.status} />}
+        <div className="flex items-center gap-4">
+          <ServerLogo server={server} size="lg" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight">{server.name}</h1>
+              {server.status !== 'ACTIVE' && <ServerStatusBadge status={server.status} />}
+            </div>
+            {server.network ? (
+              <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
+                <Network className="size-3.5" />
+                Players join through{' '}
+                <Link to={`/server/${server.network.proxyId}/proxy`} className="text-primary hover:underline">
+                  {server.network.proxyName}
+                </Link>
+                {server.network.name && (
+                  <>
+                    {' '}
+                    as <span className="font-mono">{server.network.name}</span>
+                  </>
+                )}
+              </p>
+            ) : (
+              primary && (
+                <p className="mt-1 font-mono text-sm text-muted">
+                  {primary.alias ?? primary.ip}:{primary.port}
+                </p>
+              )
+            )}
+          </div>
         </div>
-        {primary && (
-          <p className="mt-1 font-mono text-sm text-muted">
-            {primary.alias ?? primary.ip}:{primary.port}
-          </p>
-        )}
       </div>
 
       <nav className="-mb-2 flex gap-1 overflow-x-auto border-b border-border">

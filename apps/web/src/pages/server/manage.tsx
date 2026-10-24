@@ -9,6 +9,8 @@ import { Alert, Badge, Button, Card, CopyField, Field, Input, PageLoader, Select
 import { ConfirmDialog } from './files';
 import { IconButton } from './backups';
 import { SubdomainsCard, VersionCard } from './extras';
+import { LogoCard } from '../../features/server/LogoCard';
+import { isMinecraft } from '../../lib/minecraft';
 
 const useRefreshServer = () => {
   const qc = useQueryClient();
@@ -242,6 +244,7 @@ export function SettingsTab() {
           </div>
         </Card>
       )}
+      <LogoCard minecraft={isMinecraft(server.egg.name)} />
       <VersionCard />
       {can('settings.reinstall') && (
         <Card title="Reinstall" className="border-danger/40">

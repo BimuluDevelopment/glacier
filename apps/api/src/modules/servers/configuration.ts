@@ -1,8 +1,9 @@
-import type { Allocation, Egg, EggVariable, Location, Node, Server, ServerVariable } from '@prisma/client';
-import type { InstallationScript, ServerConfiguration } from '@glacier/shared';
+import type { Allocation, Egg, EggVariable, Location, Node, Prisma, Server, ServerVariable } from '@prisma/client';
+import { proxyType, type ConfigFile, type InstallationScript, type ServerConfiguration } from '@glacier/shared';
 import { buildConfigFiles, type EggConfigFile } from '@glacier/eggs';
 import { prisma } from '../../db';
 import { notFound } from '../../lib/errors';
+import { backendConfigs, proxyConfigs } from '../network/config';
 
 export const configurationInclude = {
   allocation: true,
@@ -10,7 +11,9 @@ export const configurationInclude = {
   egg: { include: { variables: true } },
   variables: true,
   node: { include: { location: true } },
-} as const;
+  backends: { include: { allocation: true }, orderBy: [{ networkOrder: 'asc' }, { id: 'asc' }] },
+  proxy: { select: { forwardingSecret: true, egg: { select: { name: true } } } },
+} satisfies Prisma.ServerInclude;
 
 type FullServer = Server & {
   allocation: Allocation;
@@ -18,7 +21,24 @@ type FullServer = Server & {
   egg: Egg & { variables: EggVariable[] };
   variables: ServerVariable[];
   node: Node & { location: Location };
+  backends: (Server & { allocation: Allocation })[];
+  proxy: { forwardingSecret: string | null; egg: { name: string } } | null;
 };
+
+/** Extra config files and environment for proxies and their backends. */
+function networkSetup(server: FullServer): { configs: ConfigFile[]; environment: Record<string, string> } {
+  const type = proxyType(server.egg.name);
+  if (type) {
+    return {
+      configs: proxyConfigs(type, server.backends),
+      // Velocity reads its forwarding secret from here before falling back to forwarding.secret.
+      environment: type === 'velocity' && server.forwardingSecret ? { VELOCITY_FORWARDING_SECRET: server.forwardingSecret } : {},
+    };
+  }
+  const proxy = server.proxy && proxyType(server.proxy.egg.name);
+  if (proxy) return { configs: backendConfigs(proxy, server.proxy!.forwardingSecret), environment: {} };
+  return { configs: [], environment: {} };
+}
 
 /** Egg variable values for a server: its own value, or the egg default. */
 export function serverEnvironment(server: FullServer): Record<string, string> {
@@ -44,6 +64,7 @@ export function buildConfiguration(server: FullServer): ServerConfiguration {
     P_SERVER_UUID: server.uuid,
     P_SERVER_ALLOCATION_LIMIT: String(server.allocationLimit),
   };
+  const network = networkSetup(server);
 
   const stop = server.egg.stopCommand;
   const signal = { '^C': 'SIGINT', '^\\': 'SIGQUIT', '^Z': 'SIGTSTP' }[stop];
@@ -52,7 +73,7 @@ export function buildConfiguration(server: FullServer): ServerConfiguration {
     uuid: server.uuid,
     suspended: server.status === 'SUSPENDED',
     invocation: server.startup,
-    environment,
+    environment: { ...environment, ...network.environment },
     allocations: { default: { ip: primary.ip, port: primary.port }, mappings },
     build: {
       memoryLimit: server.memory,
@@ -68,12 +89,15 @@ export function buildConfiguration(server: FullServer): ServerConfiguration {
     process: {
       startup: { done: server.egg.startupDone.filter(Boolean), stripAnsi: false },
       stop: signal ? { type: 'signal', value: signal } : { type: 'command', value: stop },
-      configs: buildConfigFiles(server.egg.configFiles as unknown as Record<string, EggConfigFile>, {
-        ip: primary.ip,
-        port: primary.port,
-        memory: server.memory,
-        env: environment,
-      }),
+      configs: [
+        ...buildConfigFiles(server.egg.configFiles as unknown as Record<string, EggConfigFile>, {
+          ip: primary.ip,
+          port: primary.port,
+          memory: server.memory,
+          env: environment,
+        }),
+        ...network.configs,
+      ],
     },
   };
 }

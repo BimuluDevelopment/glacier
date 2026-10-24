@@ -8,7 +8,7 @@ export interface TemplateContext {
   env: Record<string, string>;
 }
 
-const SUPPORTED_PARSERS: ConfigFileParser[] = ['properties', 'json', 'yaml', 'ini', 'file'];
+const SUPPORTED_PARSERS: ConfigFileParser[] = ['properties', 'json', 'yaml', 'ini', 'toml', 'file'];
 
 /**
  * Resolve the `{{...}}` placeholders Pterodactyl eggs use inside config file replacements.

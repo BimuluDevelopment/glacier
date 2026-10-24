@@ -38,6 +38,8 @@ import { pluginRoutes } from './modules/minecraft/plugins';
 import { playerRoutes, statsRoutes, subdomainRoutes, versionRoutes } from './modules/minecraft/manage';
 import { integrationRoutes } from './modules/integrations/service';
 import { serverTemplateRoutes } from './modules/servers/templates';
+import { serverIconRoutes } from './modules/servers/icon';
+import { networkRoutes as proxyNetworkRoutes } from './modules/network/routes';
 import { webhookRoutes } from './modules/webhooks/routes';
 import { initWebhooks } from './modules/webhooks/service';
 
@@ -137,6 +139,8 @@ export async function buildApp(config: AppConfig) {
   await app.register(playerRoutes, { prefix: '/api/client/servers/:server/players' });
   await app.register(statsRoutes, { prefix: '/api/client/servers/:server/stats' });
   await app.register(subdomainRoutes, { prefix: '/api/client/servers/:server/subdomains' });
+  await app.register(proxyNetworkRoutes, { prefix: '/api/client/servers/:server/proxy' });
+  await app.register(serverIconRoutes, { prefix: '/api/client/servers/:server/icon' });
   await app.register(overviewRoutes, { prefix: '/api/admin/overview' });
   await app.register(settingsRoutes, { prefix: '/api/admin/settings' });
   await app.register(userRoutes, { prefix: '/api/admin/users' });

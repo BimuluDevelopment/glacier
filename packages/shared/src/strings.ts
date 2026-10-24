@@ -43,6 +43,7 @@ export const DEFAULT_STRINGS = {
   'server.tab.activity': 'Activity',
   'server.tab.plugins': 'Plugins & mods',
   'server.tab.players': 'Players',
+  'server.tab.proxy': 'Proxy',
   'server.power.start': 'Start',
   'server.power.restart': 'Restart',
   'server.power.stop': 'Stop',

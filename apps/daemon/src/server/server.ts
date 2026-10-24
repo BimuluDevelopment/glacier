@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type Docker from 'dockerode';
-import type { PowerAction, ProcessState, ResourceSample, ServerConfiguration, ServerResourceUsage } from '@glacier/shared';
+import type { ConfigFile, PowerAction, ProcessState, ResourceSample, ServerConfiguration, ServerResourceUsage } from '@glacier/shared';
 import type { DaemonConfig } from '../config';
 import type { Logger } from '../logger';
 import type { PanelClient } from '../panel';
@@ -299,6 +299,20 @@ export class ServerInstance extends EventEmitter<ServerEvents> {
     }
   }
 
+  /**
+   * Write the egg's config-file replacements now (normally done on start), or a one-off set from
+   * the panel, e.g. turning proxy forwarding off when a server leaves a network. Returns errors.
+   */
+  async applyConfigs(configs: ConfigFile[] = this.config.process.configs): Promise<string[]> {
+    const errors: string[] = [];
+    const written = await applyConfigFiles(this.dataPath, configs, this.daemon, (file, err) => {
+      errors.push(`${file}: ${err.message}`);
+      this.message(`Could not update ${file}: ${err.message}`);
+    });
+    for (const f of written) await chownPath(f, this.daemon.system.user.uid, this.daemon.system.user.gid);
+    return errors;
+  }
+
   /** Re-fetch configuration from the panel. Suspending a running server stops it. */
   async sync() {
     this.config = await this.panel.getServer(this.uuid);
@@ -344,10 +358,7 @@ export class ServerInstance extends EventEmitter<ServerEvents> {
       }
 
       await this.ensureDataDirectory();
-      const written = await applyConfigFiles(this.dataPath, this.config.process.configs, this.daemon, (file, err) =>
-        this.message(`Could not update ${file}: ${err.message}`),
-      );
-      for (const f of written) await chownPath(f, this.daemon.system.user.uid, this.daemon.system.user.gid);
+      await this.applyConfigs();
 
       this.message('Pulling Docker image...');
       await pullImage(this.docker, this.config.container.image, () => undefined);

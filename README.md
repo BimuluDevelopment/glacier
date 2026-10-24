@@ -22,6 +22,7 @@ packages/eggs    PTDL egg parser/exporter, variable rule validation, bundled egg
 | M5 Two-factor (TOTP + recovery codes, optional enforcement), passkeys, Discord/Google/GitHub login, scoped API keys, signed + Discord webhooks, announcements, admin IP allowlist | ✅ |
 | M6 Plugin & mod installer (Modrinth, Hangar, CurseForge), version switcher (Paper/Purpur/Vanilla/Fabric), player manager, resource history graphs, file search, Cloudflare subdomains + SRV, server templates | ✅ |
 | M7 Smart installer (`installer/install.sh`) with `glacier update` ✅ · Pterodactyl migration ⏳ next | 🚧 |
+| Proxy networks: Velocity, BungeeCord and Waterfall eggs with a Proxy tab to add or link backend servers on the same machine (loopback-only ports, automatic forwarding setup, join order, forced hosts, owner limits) · server logos (also as Minecraft `server-icon.png`) | ✅ (container-backed paths need a Docker host) |
 
 ## Installing on a server
 

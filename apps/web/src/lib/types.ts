@@ -6,10 +6,13 @@ export interface ClientServerSummary {
   name: string;
   description: string | null;
   status: ServerStatus;
+  iconVersion: number;
   isOwner: boolean;
   node: string;
   egg: string;
   address: { ip: string; port: number };
+  /** Set for servers behind a proxy: players join through the proxy, not the address. */
+  network: { proxyName: string; name: string | null } | null;
   limits: { memory: number; disk: number; cpu: number };
 }
 
@@ -19,6 +22,9 @@ export interface ClientServer {
   name: string;
   description: string | null;
   status: ServerStatus;
+  iconVersion: number;
+  /** The proxy network this server belongs to. */
+  network: { proxyId: string; proxyName: string; name: string | null } | null;
   isOwner: boolean;
   permissions: string[];
   node: { name: string; fqdn: string; sftpPort: number };

@@ -53,8 +53,11 @@ export function registerFileRoutes(api: FastifyInstance, manager: ServerManager,
   });
 
   api.post('/api/servers/:uuid/files/write', { bodyLimit: MAX_EDITABLE_FILE_BYTES + 64 * 1024 }, async (req) => {
-    const body = z.object({ file: pathString.min(1), content: z.string().max(MAX_EDITABLE_FILE_BYTES) }).parse(req.body);
-    return server(req.params).fs.write(body.file, Buffer.from(body.content, 'utf8'));
+    // base64 lets the panel write small binary files, like a Minecraft server-icon.png.
+    const body = z
+      .object({ file: pathString.min(1), content: z.string().max(MAX_EDITABLE_FILE_BYTES), encoding: z.enum(['utf8', 'base64']).default('utf8') })
+      .parse(req.body);
+    return server(req.params).fs.write(body.file, Buffer.from(body.content, body.encoding));
   });
 
   api.post('/api/servers/:uuid/files/create-directory', async (req) => {

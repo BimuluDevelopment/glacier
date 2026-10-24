@@ -164,6 +164,25 @@ export async function registerRoutes(app: FastifyInstance, config: DaemonConfig,
       return { ok: true };
     });
 
+    /** Re-fetch the configuration and write config files now; or write the given one-off set. */
+    api.post('/api/servers/:uuid/configs/apply', async (req) => {
+      const { uuid } = uuidParam.parse(req.params);
+      const replacement = z.object({ match: z.string().min(1).max(200), replaceWith: z.string().max(10_000).default(''), value: z.unknown().optional() });
+      const { configs } = z
+        .object({
+          configs: z
+            .array(z.object({ file: z.string().min(1).max(255), parser: z.enum(['properties', 'json', 'yaml', 'ini', 'toml', 'file']), replace: z.array(replacement).max(100) }))
+            .max(20)
+            .optional(),
+        })
+        .parse(req.body ?? {});
+      const server = manager.get(uuid);
+      if (server.installing) throw new ServerError('The server is installing.');
+      if (!configs) await server.sync();
+      await server.ensureDataDirectory();
+      return { errors: await server.applyConfigs(configs) };
+    });
+
     api.post('/api/servers/:uuid/reinstall', async (req, reply) => {
       const { uuid } = uuidParam.parse(req.params);
       const server = manager.get(uuid);

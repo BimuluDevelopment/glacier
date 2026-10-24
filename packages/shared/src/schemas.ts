@@ -94,6 +94,11 @@ export const serverBuildSchema = z.object({
   databaseLimit: z.number().int().min(0).default(0),
   allocationLimit: z.number().int().min(0).default(0),
   backupLimit: z.number().int().min(0).default(0),
+  // Proxy servers only: what the owner may add to the network themselves (0 = only admins can).
+  networkServerLimit: z.number().int().min(0).default(0),
+  networkMemoryLimit: z.number().int().min(0).default(0),
+  networkDiskLimit: z.number().int().min(0).default(0),
+  networkCpuLimit: z.number().int().min(0).default(0),
 });
 
 export const serverCreateSchema = serverBuildSchema.extend({

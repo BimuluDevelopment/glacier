@@ -134,10 +134,15 @@ function setIn(target: any, segments: (string | number)[], value: unknown) {
   node[segments.at(-1)!] = value;
 }
 
+/** The value a replacement sets: its structured `value` if it has one, else the coerced string. */
+function replacementValue(r: ConfigFileReplacement): unknown {
+  return r.value !== undefined ? r.value : coerceScalar(r.replaceWith);
+}
+
 export function applyJson(text: string, replace: ConfigFileReplacement[]): string {
   const data = text.trim() ? JSON.parse(text) : {};
-  for (const { match, replaceWith } of replace) {
-    for (const p of expandPaths(data, parsePath(match))) setIn(data, p, coerceScalar(replaceWith));
+  for (const r of replace) {
+    for (const p of expandPaths(data, parsePath(r.match))) setIn(data, p, replacementValue(r));
   }
   return JSON.stringify(data, null, 2) + '\n';
 }
@@ -146,10 +151,107 @@ export function applyYaml(text: string, replace: ConfigFileReplacement[]): strin
   // Edit the document in place so comments and formatting survive.
   const doc: Document = text.trim() ? YAML.parseDocument(text) : new YAML.Document({});
   if (!isMap(doc.contents) && !isSeq(doc.contents)) doc.contents = doc.createNode({}) as any;
-  for (const { match, replaceWith } of replace) {
-    for (const p of expandPaths(doc.toJS(), parsePath(match))) doc.setIn(p, coerceScalar(replaceWith));
+  for (const r of replace) {
+    const value = replacementValue(r);
+    for (const p of expandPaths(doc.toJS(), parsePath(r.match))) doc.setIn(p, value !== null && typeof value === 'object' ? doc.createNode(value) : value);
   }
   return doc.toString();
+}
+
+const BARE_TOML_KEY = /^[A-Za-z0-9_-]+$/;
+
+function tomlKey(key: string) {
+  return BARE_TOML_KEY.test(key) ? key : JSON.stringify(key);
+}
+
+/** JSON string escapes are valid TOML basic strings, and JSON-style arrays are valid TOML arrays. */
+export function tomlValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(tomlValue).join(', ')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{ ${Object.entries(value).map(([k, v]) => `${tomlKey(k)} = ${tomlValue(v)}`).join(', ')} }`;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(String(value ?? ''));
+}
+
+/** The key a `key = value` line sets, unquoted, or null for other lines. */
+function tomlLineKey(line: string): string | null {
+  const m = /^\s*("(?:[^"\\]|\\.)*"|[A-Za-z0-9_.-]+)\s*=/.exec(line);
+  if (!m) return null;
+  return m[1]!.startsWith('"') ? (JSON.parse(m[1]!) as string) : m[1]!;
+}
+
+const tomlHeader = (line: string) => /^\s*\[/.test(line);
+
+/**
+ * Line-based TOML editing for proxy configs like velocity.toml, so comments survive. `match` is a
+ * top-level key ("bind"), a key in a table ("advanced.compression-threshold"), or a table name with
+ * a map value, which replaces that whole table ("servers").
+ */
+export function applyToml(text: string, replace: ConfigFileReplacement[]): string {
+  const lines = text.split(/\r?\n/);
+  if (lines.at(-1) === '') lines.pop();
+
+  // Where a table's body starts and ends (end is exclusive). The top level is table null.
+  const range = (table: string | null): [number, number] | null => {
+    if (table === null) {
+      const first = lines.findIndex(tomlHeader);
+      return [0, first === -1 ? lines.length : first];
+    }
+    const header = lines.findIndex((l) => {
+      const m = /^\s*\[\s*("(?:[^"\\]|\\.)*"|[^\]\s]+)\s*\]\s*(#.*)?$/.exec(l);
+      return m && (m[1]!.startsWith('"') ? JSON.parse(m[1]!) : m[1]) === table;
+    });
+    if (header === -1) return null;
+    const next = lines.findIndex((l, i) => i > header && tomlHeader(l));
+    return [header + 1, next === -1 ? lines.length : next];
+  };
+
+  for (const r of replace) {
+    const value = replacementValue(r);
+
+    if (value !== null && typeof value === 'object' && !Array.isArray(value) && !r.match.includes('.')) {
+      const body = Object.entries(value).map(([k, v]) => `${tomlKey(k)} = ${tomlValue(v)}`);
+      const found = range(r.match);
+      if (!found) {
+        if (lines.length && lines.at(-1) !== '') lines.push('');
+        lines.push(`[${tomlKey(r.match)}]`, ...body);
+      } else {
+        const [start, end] = found;
+        lines.splice(start, end - start, ...body, ...(end < lines.length ? [''] : []));
+      }
+      continue;
+    }
+
+    const dot = r.match.indexOf('.');
+    const table = dot === -1 ? null : r.match.slice(0, dot);
+    const key = dot === -1 ? r.match : r.match.slice(dot + 1);
+    const line = `${tomlKey(key)} = ${tomlValue(value)}`;
+    const found = range(table);
+    if (!found) {
+      if (lines.length && lines.at(-1) !== '') lines.push('');
+      lines.push(`[${tomlKey(table!)}]`, line);
+      continue;
+    }
+    const [start, end] = found;
+    const index = lines.findIndex((l, i) => i >= start && i < end && tomlLineKey(l) === key);
+    if (index === -1) {
+      // Add it after the table's last non-blank line.
+      let at = end;
+      while (at > start && lines[at - 1]!.trim() === '') at--;
+      lines.splice(at, 0, line);
+      continue;
+    }
+    // A multi-line array value continues until its closing bracket.
+    let last = index;
+    const rest = lines[index]!.slice(lines[index]!.indexOf('=') + 1);
+    if ((rest.match(/\[/g) ?? []).length > (rest.match(/\]/g) ?? []).length) {
+      while (last + 1 < end && !lines[last + 1]!.includes(']')) last++;
+      if (last + 1 < end) last++;
+    }
+    lines.splice(index, last - index + 1, line);
+  }
+  return lines.join('\n') + '\n';
 }
 
 const APPLIERS = {
@@ -158,6 +260,7 @@ const APPLIERS = {
   file: applyFile,
   json: applyJson,
   yaml: applyYaml,
+  toml: applyToml,
 } as const;
 
 /**
@@ -179,7 +282,8 @@ export async function applyConfigFiles(
         text = await readFile(target, 'utf8');
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
-        if (cf.parser === 'file') continue;
+        // Proxies write a complete velocity.toml on first start; a partial one would confuse them.
+        if (cf.parser === 'file' || cf.parser === 'toml') continue;
         await mkdir(path.dirname(target), { recursive: true });
       }
       const replace = cf.replace.map((r) => ({ ...r, replaceWith: resolveDaemonTemplates(r.replaceWith, config) }));

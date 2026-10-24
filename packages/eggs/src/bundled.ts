@@ -224,6 +224,220 @@ echo "Fabric installed. Add mods from the panel's Plugins & mods tab."
   ],
 };
 
+const PROXY_IMAGES = {
+  'Java 21': 'ghcr.io/pterodactyl/yolks:java_21',
+  'Java 17': 'ghcr.io/pterodactyl/yolks:java_17',
+};
+const PROXY_STARTUP =
+  'java -Xms128M -XX:MaxRAMPercentage=95.0 -XX:+UseG1GC -XX:G1HeapRegionSize=4M -XX:+UnlockExperimentalVMOptions -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch -jar {{SERVER_JARFILE}}';
+
+const velocity: PtdlEgg = {
+  meta: { version: 'PTDL_v2' },
+  uuid: '5a1b0f2e-6c0e-4a43-9a8d-2f1c7b3e9d20',
+  name: 'Velocity',
+  author: 'eggs@glacier.gg',
+  description: 'Modern, fast Minecraft proxy from PaperMC. Link Paper servers behind it from the Proxy tab.',
+  features: ['java_version', 'pid_limit'],
+  docker_images: PROXY_IMAGES,
+  file_denylist: [],
+  startup: PROXY_STARTUP,
+  config: {
+    files: JSON.stringify({
+      'velocity.toml': { parser: 'file', find: { 'bind = ': 'bind = "0.0.0.0:{{server.build.default.port}}"' } },
+    }),
+    startup: JSON.stringify({ done: 'Done (' }),
+    logs: '{}',
+    stop: 'end',
+  },
+  scripts: {
+    installation: {
+      container: 'ghcr.io/pterodactyl/installers:alpine',
+      entrypoint: 'ash',
+      script: `#!/bin/ash
+# Velocity installation script: downloads a build from PaperMC's Fill API.
+set -e
+cd /mnt/server
+API=https://fill.papermc.io/v3/projects/velocity
+
+if [ -z "$VELOCITY_VERSION" ] || [ "$VELOCITY_VERSION" = "latest" ]; then
+  VELOCITY_VERSION=$(curl -fsSL "$API" | jq -r '[.versions[][]][0]')
+fi
+echo "Installing Velocity $VELOCITY_VERSION"
+DOWNLOAD_URL=$(curl -fsSL "$API/versions/$VELOCITY_VERSION/builds/latest" | jq -r '.downloads."server:default".url')
+if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+  echo "No Velocity build found for $VELOCITY_VERSION"
+  exit 1
+fi
+if [ -f "$SERVER_JARFILE" ]; then mv "$SERVER_JARFILE" "$SERVER_JARFILE.old"; fi
+curl -fsSL -o "$SERVER_JARFILE" "$DOWNLOAD_URL"
+
+# A complete config before the first start, so the panel can manage its server list right away.
+if [ ! -f velocity.toml ]; then
+  cat > velocity.toml <<'EOF'
+# Velocity configuration. The server list is managed from the panel's Proxy tab.
+config-version = "2.7"
+bind = "0.0.0.0:25565"
+motd = "<#09add3>A Velocity Server"
+show-max-players = 500
+online-mode = true
+force-key-authentication = true
+prevent-client-proxy-connections = false
+player-info-forwarding-mode = "NONE"
+forwarding-secret-file = "forwarding.secret"
+announce-forge = false
+kick-existing-players = false
+ping-passthrough = "DISABLED"
+sample-players-in-ping = false
+enable-player-address-logging = true
+
+[servers]
+try = []
+
+[forced-hosts]
+
+[advanced]
+compression-threshold = 256
+compression-level = -1
+login-ratelimit = 3000
+connection-timeout = 5000
+read-timeout = 30000
+haproxy-protocol = false
+tcp-fast-open = false
+bungee-plugin-message-channel = true
+show-ping-requests = false
+failover-on-unexpected-server-disconnect = true
+announce-proxy-commands = true
+log-command-executions = false
+log-player-connections = true
+accepts-transfers = false
+
+[query]
+enabled = false
+port = 25565
+map = "Velocity"
+show-plugins = false
+EOF
+  sed -i "s/^bind = .*/bind = \\"0.0.0.0:$SERVER_PORT\\"/" velocity.toml
+fi
+echo "Velocity installed."
+`,
+    },
+  },
+  variables: [
+    {
+      name: 'Velocity Version',
+      description: 'Version to install, e.g. 3.4.0-SNAPSHOT. "latest" picks the newest.',
+      env_variable: 'VELOCITY_VERSION',
+      default_value: 'latest',
+      user_viewable: true,
+      user_editable: true,
+      rules: 'required|string|max:32',
+    },
+    {
+      name: 'Server Jar File',
+      description: 'Name of the jar the proxy runs.',
+      env_variable: 'SERVER_JARFILE',
+      default_value: 'velocity.jar',
+      user_viewable: true,
+      user_editable: true,
+      rules: 'required|regex:/^([\\w\\d._-]+)(\\.jar)$/',
+    },
+  ],
+};
+
+/** BungeeCord and Waterfall share a config format; only the download differs. */
+const bungeeConfig: PtdlEgg['config'] = {
+  files: JSON.stringify({
+    'config.yml': { parser: 'yaml', find: { 'listeners[0].host': '0.0.0.0:{{server.build.default.port}}', 'listeners[0].query_port': '{{server.build.default.port}}' } },
+  }),
+  startup: JSON.stringify({ done: 'Listening on ' }),
+  logs: '{}',
+  stop: 'end',
+};
+
+const bungeecord: PtdlEgg = {
+  meta: { version: 'PTDL_v2' },
+  uuid: '5a1b0f2e-6c0e-4a43-9a8d-2f1c7b3e9d21',
+  name: 'BungeeCord',
+  author: 'eggs@glacier.gg',
+  description: 'The original Minecraft proxy by md_5. Link Spigot or Paper servers behind it from the Proxy tab.',
+  features: ['java_version', 'pid_limit'],
+  docker_images: PROXY_IMAGES,
+  file_denylist: [],
+  startup: PROXY_STARTUP,
+  config: bungeeConfig,
+  scripts: {
+    installation: {
+      container: 'ghcr.io/pterodactyl/installers:alpine',
+      entrypoint: 'ash',
+      script: `#!/bin/ash
+# BungeeCord installation script: downloads the latest successful build from md_5's CI.
+set -e
+cd /mnt/server
+echo "Installing BungeeCord"
+if [ -f "$SERVER_JARFILE" ]; then mv "$SERVER_JARFILE" "$SERVER_JARFILE.old"; fi
+curl -fsSL -o "$SERVER_JARFILE" https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar
+echo "BungeeCord installed."
+`,
+    },
+  },
+  variables: [
+    {
+      name: 'Server Jar File',
+      description: 'Name of the jar the proxy runs.',
+      env_variable: 'SERVER_JARFILE',
+      default_value: 'bungeecord.jar',
+      user_viewable: true,
+      user_editable: true,
+      rules: 'required|regex:/^([\\w\\d._-]+)(\\.jar)$/',
+    },
+  ],
+};
+
+const waterfall: PtdlEgg = {
+  ...bungeecord,
+  uuid: '5a1b0f2e-6c0e-4a43-9a8d-2f1c7b3e9d22',
+  name: 'Waterfall',
+  description: "PaperMC's BungeeCord fork. No longer developed (PaperMC recommends Velocity), but kept for existing networks.",
+  scripts: {
+    installation: {
+      container: 'ghcr.io/pterodactyl/installers:alpine',
+      entrypoint: 'ash',
+      script: `#!/bin/ash
+# Waterfall installation script: downloads a build from PaperMC's Fill API.
+set -e
+cd /mnt/server
+API=https://fill.papermc.io/v3/projects/waterfall
+
+if [ -z "$WATERFALL_VERSION" ] || [ "$WATERFALL_VERSION" = "latest" ]; then
+  WATERFALL_VERSION=$(curl -fsSL "$API" | jq -r '[.versions[][]][0]')
+fi
+echo "Installing Waterfall $WATERFALL_VERSION"
+DOWNLOAD_URL=$(curl -fsSL "$API/versions/$WATERFALL_VERSION/builds/latest" | jq -r '.downloads."server:default".url')
+if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+  echo "No Waterfall build found for $WATERFALL_VERSION"
+  exit 1
+fi
+if [ -f "$SERVER_JARFILE" ]; then mv "$SERVER_JARFILE" "$SERVER_JARFILE.old"; fi
+curl -fsSL -o "$SERVER_JARFILE" "$DOWNLOAD_URL"
+echo "Waterfall installed."
+`,
+    },
+  },
+  variables: [
+    {
+      name: 'Waterfall Version',
+      description: 'Minecraft version line, e.g. 1.21. "latest" picks the newest.',
+      env_variable: 'WATERFALL_VERSION',
+      default_value: 'latest',
+      user_viewable: true,
+      user_editable: true,
+      rules: 'required|string|max:32',
+    },
+    ...(bungeecord.variables ?? []).map((v) => (v.env_variable === 'SERVER_JARFILE' ? { ...v, default_value: 'waterfall.jar' } : v)),
+  ],
+};
+
 const nodejs: PtdlEgg = {
   meta: { version: 'PTDL_v2' },
   uuid: '5a1b0f2e-6c0e-4a43-9a8d-2f1c7b3e9d10',
@@ -349,6 +563,9 @@ export const BUNDLED_EGGS: { nest: string; nestDescription: string; egg: PtdlEgg
   { nest: 'Minecraft', nestDescription: 'Minecraft: Java Edition servers.', egg: purpur },
   { nest: 'Minecraft', nestDescription: 'Minecraft: Java Edition servers.', egg: fabric },
   { nest: 'Minecraft', nestDescription: 'Minecraft: Java Edition servers.', egg: vanilla },
+  { nest: 'Minecraft Proxies', nestDescription: 'Proxies that link several Minecraft servers into one network.', egg: velocity },
+  { nest: 'Minecraft Proxies', nestDescription: 'Proxies that link several Minecraft servers into one network.', egg: bungeecord },
+  { nest: 'Minecraft Proxies', nestDescription: 'Proxies that link several Minecraft servers into one network.', egg: waterfall },
   { nest: 'Generic', nestDescription: 'General-purpose runtimes for apps and bots.', egg: nodejs },
   { nest: 'Generic', nestDescription: 'General-purpose runtimes for apps and bots.', egg: python },
 ];

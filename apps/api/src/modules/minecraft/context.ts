@@ -15,6 +15,8 @@ export function detectLoader(eggName: string): Loader | null {
   if (n.includes('folia')) return 'folia';
   if (n.includes('purpur')) return 'purpur';
   if (n.includes('velocity')) return 'velocity';
+  if (n.includes('waterfall')) return 'waterfall';
+  if (n.includes('bungee')) return 'bungeecord';
   if (n.includes('paper') || n.includes('spigot') || n.includes('bukkit')) return 'paper';
   return null;
 }

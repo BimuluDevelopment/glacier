@@ -8,10 +8,10 @@ import { logActivity } from '../../lib/activity';
 import { idParam, paged, paginate, paginationQuery } from '../../lib/http';
 import { requireAdmin } from '../../plugins/auth';
 import { daemonRequest } from '../nodes/daemon-client';
-import { dropDatabase, hostCredentials } from '../databases/service';
 import { displayName, notify } from '../mail/service';
-import { deleteSubdomainRecords } from '../minecraft/manage';
+import { refreshProxy } from '../network/service';
 import { createServer, resolveVariables, syncServer } from './service';
+import { deleteServer } from './delete';
 
 const detailsSchema = z.object({
   name: z.string().min(1).max(191).optional(),
@@ -173,36 +173,8 @@ export const adminServerRoutes: FastifyPluginAsync = async (app) => {
     // Not z.coerce.boolean(): that turns the string "false" into true.
     const { force } = z.object({ force: z.enum(['true', 'false']).default('false').transform((v) => v === 'true') }).parse(req.query);
     const server = await load(id);
-    const [databases, backups] = await Promise.all([
-      prisma.serverDatabase.findMany({ where: { serverId: id }, include: { host: true } }),
-      prisma.backup.findMany({ where: { serverId: id } }),
-    ]);
-
-    // Databases live outside the node; drop them first so a failure leaves everything in place.
-    for (const db of databases) {
-      try {
-        await dropDatabase(hostCredentials(db.host, app.encrypter), db);
-      } catch (err) {
-        if (!force) throw err;
-        req.log.warn({ err, database: db.database }, 'force-deleting server; database could not be dropped');
-      }
-    }
-    // DNS records outlive the server otherwise.
-    for (const sub of await prisma.subdomain.findMany({ where: { serverId: id } })) {
-      await deleteSubdomainRecords(app.encrypter, sub).catch((err) => req.log.warn({ err, hostname: sub.hostname }, 'could not delete subdomain records'));
-    }
-    for (const backup of backups) {
-      await daemonRequest(server.node, app.encrypter, 'DELETE', `/api/servers/${server.uuid}/backup/${backup.uuid}`).catch((err) =>
-        req.log.warn({ err, backup: backup.uuid }, 'could not delete backup file'),
-      );
-    }
-    try {
-      await daemonRequest(server.node, app.encrypter, 'DELETE', `/api/servers/${server.uuid}`, undefined, 60_000);
-    } catch (err) {
-      if (!force) throw err;
-      req.log.warn({ err, server: server.uuid }, 'force-deleting server the daemon could not remove');
-    }
-    await prisma.server.delete({ where: { id } });
+    await deleteServer(app, server, { force, log: req.log });
+    if (server.proxyId) await refreshProxy(app, server.proxyId, req.log);
     await logActivity(req, 'admin:server.delete', { properties: { serverId: id, name: server.name, uuid: server.uuid, force } });
     return { ok: true };
   });

@@ -215,9 +215,28 @@ model Server {
   databaseLimit   Int          @default(0)
   allocationLimit Int          @default(0)
   backupLimit     Int          @default(0)
+  /// Bumped whenever the logo changes, so browsers refetch it. 0 = no logo.
+  iconVersion     Int          @default(0)
   installedAt     DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+
+  // Proxy networks. On a backend: the proxy it belongs to and its entry in the proxy's server list.
+  proxyId            Int?
+  networkName        String?
+  networkOrder       Int      @default(0)
+  /// Players join this server first and fall back to it (Velocity "try", BungeeCord "priorities").
+  networkFallback    Boolean  @default(false)
+  networkForcedHosts String[] @default([])
+  /// Created from the proxy page, so its owner may delete it there.
+  networkManaged     Boolean  @default(false)
+  // On a proxy: Velocity's forwarding secret (also stored in the backends' own config files, so it
+  // is not encrypted here) and what the owner may add to the network without an admin.
+  forwardingSecret   String?
+  networkServerLimit Int      @default(0)
+  networkMemoryLimit Int      @default(0)
+  networkDiskLimit   Int      @default(0)
+  networkCpuLimit    Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   owner       User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   node        Node              @relation(fields: [nodeId], references: [id], onDelete: Restrict)
@@ -232,9 +251,24 @@ model Server {
   databases   ServerDatabase[]
   plugins     InstalledPlugin[]
   subdomains  Subdomain[]
+  icon        ServerIcon?
+  proxy       Server?           @relation("ProxyNetwork", fields: [proxyId], references: [id], onDelete: SetNull)
+  backends    Server[]          @relation("ProxyNetwork")
 
+  @@unique([proxyId, networkName])
   @@index([ownerId])
   @@index([nodeId])
+}
+
+/// A server's logo, kept apart from Server so listing servers doesn't load image bytes.
+model ServerIcon {
+  serverId  Int      @id
+  data      Bytes
+  /// image/png, image/jpeg, image/webp or image/gif
+  type      String
+  updatedAt DateTime @updatedAt
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
 }
 
 model ServerVariable {

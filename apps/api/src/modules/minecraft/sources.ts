@@ -48,6 +48,8 @@ function modrinthLoaders(loader: Loader | null): string[] {
       return ['folia'];
     case 'spigot':
       return ['spigot', 'bukkit'];
+    case 'waterfall':
+      return ['waterfall', 'bungeecord'];
     case null:
       return [];
     default:
@@ -128,6 +130,7 @@ const modrinth: Catalog = {
 
 function hangarPlatform(loader: Loader | null) {
   if (loader === 'velocity') return 'VELOCITY';
+  if (loader === 'waterfall' || loader === 'bungeecord') return 'WATERFALL';
   if (loader && ['paper', 'purpur', 'folia', 'spigot'].includes(loader)) return 'PAPER';
   return null;
 }

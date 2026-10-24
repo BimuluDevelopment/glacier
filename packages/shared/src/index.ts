@@ -8,3 +8,4 @@ export * from './glob';
 export * from './markdown';
 export * from './strings';
 export * from './minecraft';
+export * from './network';

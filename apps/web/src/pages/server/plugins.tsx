@@ -25,6 +25,8 @@ const LOADER_LABELS: Record<Loader, string> = {
   spigot: 'Spigot',
   folia: 'Folia',
   velocity: 'Velocity (proxy)',
+  bungeecord: 'BungeeCord (proxy)',
+  waterfall: 'Waterfall (proxy)',
   fabric: 'Fabric',
   quilt: 'Quilt',
   forge: 'Forge',

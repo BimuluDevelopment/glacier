@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import type { Node, Server, User } from '@prisma/client';
+import type { Node, Prisma, Server, User } from '@prisma/client';
 import { PERMISSION_ALL, hasPermission, serverCreateSchema, type ServerPermission } from '@glacier/shared';
 import { validateVariable } from '@glacier/eggs';
 import { prisma } from '../../db';
@@ -47,7 +47,10 @@ async function assertCapacity(node: Node, memory: number, disk: number, excludeS
   check('disk space', node.disk, node.diskOverallocate, used._sum.disk ?? 0, disk);
 }
 
-export async function createServer(app: FastifyInstance, input: CreateInput): Promise<Server> {
+/** Network membership for servers created from a proxy's page. */
+type NetworkFields = Pick<Prisma.ServerUncheckedCreateInput, 'proxyId' | 'networkName' | 'networkOrder' | 'networkFallback' | 'networkManaged'>;
+
+export async function createServer(app: FastifyInstance, input: CreateInput, network: NetworkFields = {}): Promise<Server> {
   const [owner, egg, allocation] = await Promise.all([
     prisma.user.findUnique({ where: { id: input.ownerId } }),
     prisma.egg.findUnique({ where: { id: input.eggId }, include: { variables: true } }),
@@ -93,9 +96,14 @@ export async function createServer(app: FastifyInstance, input: CreateInput): Pr
         databaseLimit: input.databaseLimit,
         allocationLimit: input.allocationLimit,
         backupLimit: input.backupLimit,
+        networkServerLimit: input.networkServerLimit,
+        networkMemoryLimit: input.networkMemoryLimit,
+        networkDiskLimit: input.networkDiskLimit,
+        networkCpuLimit: input.networkCpuLimit,
         image: input.image ?? images[0]!,
         startup: input.startup ?? egg.startup,
         variables: { create: variableValues },
+        ...network,
       },
     });
     const ids = [allocation.id, ...extraIds];

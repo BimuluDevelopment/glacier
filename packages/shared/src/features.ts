@@ -9,6 +9,7 @@ export const FEATURE_FLAGS = {
   announcements: { label: 'Announcements', description: 'Show admin announcements on the dashboard.', default: true, ready: true },
   plugins: { label: 'Plugin & mod installer', description: 'Browse and install from Modrinth, Hangar and CurseForge.', default: true, ready: true },
   subdomains: { label: 'Subdomains', description: 'Let users attach Cloudflare subdomains to servers (configure under Settings).', default: false, ready: true },
+  networks: { label: 'Proxy networks', description: 'Velocity, BungeeCord and Waterfall servers get a Proxy tab for adding and linking backend servers.', default: true, ready: true },
   passkeys: { label: 'Passkeys', description: 'Sign in with Face ID, Windows Hello, a phone or a security key.', default: true, ready: true },
   oauth: { label: 'Social login', description: 'Discord, Google and GitHub sign-in (configure under Security).', default: false, ready: true },
 } as const;

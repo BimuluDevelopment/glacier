@@ -4,7 +4,7 @@ export const PLUGIN_SOURCES = ['modrinth', 'hangar', 'curseforge'] as const;
 export type PluginSource = (typeof PLUGIN_SOURCES)[number];
 
 /** Server software a plugin/mod targets. Plugins go in plugins/, mods in mods/. */
-export const LOADERS = ['paper', 'purpur', 'spigot', 'folia', 'velocity', 'fabric', 'quilt', 'forge', 'neoforge'] as const;
+export const LOADERS = ['paper', 'purpur', 'spigot', 'folia', 'velocity', 'bungeecord', 'waterfall', 'fabric', 'quilt', 'forge', 'neoforge'] as const;
 export type Loader = (typeof LOADERS)[number];
 
 export const MOD_LOADERS: readonly Loader[] = ['fabric', 'quilt', 'forge', 'neoforge'];
