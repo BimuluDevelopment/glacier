@@ -28,7 +28,7 @@ packages/eggs    PTDL egg parser/exporter, variable rule validation, bundled egg
 On a fresh Ubuntu 22.04/24.04 or Debian 12 server, with your domain pointing at it:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/BimuluDevelopment/glacier/main/installer/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/BimuluDevelopment/glacier/master/installer/install.sh | sudo bash
 ```
 
 See **[docs/install.md](docs/install.md)** for the full install guide: the panel and a node on one machine, adding more nodes, and optional extras (email, social sign-in, CurseForge, Cloudflare subdomains, MySQL). Templates for nginx, systemd and the database live in [deploy/](deploy/).

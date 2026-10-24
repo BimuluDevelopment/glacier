@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Glacier Panel installer.
 #
-#   curl -sSL https://raw.githubusercontent.com/BimuluDevelopment/glacier/main/installer/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/BimuluDevelopment/glacier/master/installer/install.sh | sudo bash
 #
 # It downloads Glacier Panel to /opt/glacier and installs everything it needs (Node.js, Docker,
 # PostgreSQL, nginx, a Let's Encrypt certificate, systemd services, firewall rules).
@@ -13,7 +13,7 @@
 set -Eeuo pipefail
 
 REPO_URL="${GLACIER_REPO:-https://github.com/BimuluDevelopment/glacier.git}"
-BRANCH="${GLACIER_BRANCH:-main}"
+BRANCH="${GLACIER_BRANCH:-master}"
 INSTALL_DIR=/opt/glacier
 CONFIG_DIR=/etc/glacier
 PANEL_ENV="$CONFIG_DIR/panel.env"
@@ -140,7 +140,7 @@ choose_mode() {
 
 preflight() {
   step "Checking this machine"
-  [[ $EUID -eq 0 ]] || die "Run the installer as root, e.g. with: curl -sSL … | sudo bash"
+  [[ $EUID -eq 0 ]] || die "Run the installer as root, e.g. with: curl -fsSL … | sudo bash"
   command -v systemctl >/dev/null || die "systemd is required."
   [[ -r /etc/os-release ]] || die "Can't tell which Linux this is (/etc/os-release is missing)."
   # shellcheck disable=SC1091
@@ -183,9 +183,20 @@ preflight() {
     owner=$(ss -Hltnp "sport = :$port" 2>/dev/null | grep -o 'users:(("[^"]*' | head -n 1 | cut -d'"' -f2 || true)
     case $owner in
       "" | nginx | node | docker-proxy) ;;
-      *) warn "Port $port is already used by ${owner}. Glacier Panel needs it." ;;
+      *)
+        case $port in
+          8080) warn "Port 8080 is already used by ${owner}. When you create the node in the panel, give it another daemon port (e.g. 8081)." ;;
+          2022) warn "Port 2022 is already used by ${owner}. When you create the node in the panel, give it another SFTP port (e.g. 2023)." ;;
+          *) warn "Port $port is already used by ${owner}. The panel needs it for its website." ;;
+        esac
+        ;;
     esac
   done
+
+  if systemctl list-unit-files wings.service >/dev/null 2>&1 && systemctl cat wings.service >/dev/null 2>&1; then
+    warn "Pterodactyl Wings is installed. Glacier can run next to it, but they must not share ports:"
+    warn "use a different daemon/SFTP port for the Glacier node, and game ports Wings doesn't use."
+  fi
 }
 
 # Warn when a domain doesn't point at this server (the certificate request would fail).
@@ -194,7 +205,8 @@ check_dns() {
   public=$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)
   resolved=$(getent ahostsv4 "$name" 2>/dev/null | awk 'NR == 1 { print $1 }' || true)
   if [[ -z $resolved ]]; then
-    warn "$name doesn't resolve yet. Create an A record pointing it at ${public:-this server's IP}, then wait a few minutes."
+    # No apostrophes inside ${...:-...}: bash would read them as the start of a quoted string.
+    warn "$name doesn't resolve yet. Create an A record pointing it at ${public:-this server}, then wait a few minutes."
     confirm "Continue anyway? (getting the HTTPS certificate will fail)" N || exit 1
   elif [[ -n $public && $resolved != "$public" ]]; then
     warn "$name points at $resolved, but this server's public IP is $public."
@@ -483,8 +495,20 @@ start_daemon_service() {
 install_daemon() {
   step "Setting up the node (glacierd)"
   pair_daemon
+  open_daemon_ports
   setup_daemon_tls
   start_daemon_service
+}
+
+# The node's ports come from the panel at pairing time and may not be the defaults.
+open_daemon_ports() {
+  command -v ufw >/dev/null || return 0
+  local api sftp
+  api=$(daemon_config get api.port)
+  sftp=$(daemon_config get sftp.port)
+  ufw allow "${api:-8080}/tcp" >>"$LOG" 2>&1
+  ufw allow "${sftp:-2022}/tcp" >>"$LOG" 2>&1
+  ok "Firewall allows the node ports ${api:-8080} and ${sftp:-2022}"
 }
 
 # In "all" mode the node can only be paired once the admin account and node exist in the panel.
@@ -552,7 +576,7 @@ Options:
   --fqdn <name>     (daemon) override the node hostname used for its certificate
   --no-ssl          plain HTTP, e.g. on a home network without a domain
   --repo <url>      git repository to install from
-  --branch <name>   branch to install (default: main)
+  --branch <name>   branch to install (default: master)
   -y, --yes         don't ask questions; use the options and defaults
 
 After installing, update with: sudo glacier update
@@ -590,7 +614,7 @@ parse_args() {
 
 main() {
   parse_args "$@"
-  [[ $EUID -eq 0 ]] || die "Run the installer as root, e.g. with: curl -sSL … | sudo bash"
+  [[ $EUID -eq 0 ]] || die "Run the installer as root, e.g. with: curl -fsSL … | sudo bash"
   mkdir -p "$(dirname "$LOG")"
   log "" "===== Glacier Panel installer, $(date -u '+%Y-%m-%d %H:%M:%S UTC'), args: $* ====="
   printf '\n%s  Glacier Panel installer%s\n' "$BOLD" "$RESET"

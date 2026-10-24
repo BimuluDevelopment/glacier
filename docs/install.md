@@ -10,7 +10,7 @@ Glacier Panel is free software you run on your own machines. It has two parts:
 Point your domain at the server (see [Before you start](#before-you-start)), then run this as root:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/BimuluDevelopment/glacier/main/installer/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/BimuluDevelopment/glacier/master/installer/install.sh | sudo bash
 ```
 
 The installer:
@@ -25,7 +25,7 @@ For **panel and node** on one machine, it then waits for you to:
 2. Create a node (Admin → Nodes → New node) with the panel's domain as its hostname.
 3. Paste the pairing command shown on the node page into the installer, which then sets up the node.
 
-**More nodes:** on each extra machine, paste the install command from that node's page in the panel. It looks like `curl -sSL https://panel.example.com/install.sh | sudo bash -s -- daemon --panel … --token …`.
+**More nodes:** on each extra machine, paste the install command from that node's page in the panel. It looks like `curl -fsSL https://panel.example.com/install.sh | sudo bash -s -- daemon --panel … --token …`.
 
 **Updating:** `sudo glacier update`
 

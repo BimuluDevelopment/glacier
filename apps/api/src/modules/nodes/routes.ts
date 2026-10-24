@@ -29,7 +29,7 @@ export const nodeRoutes: FastifyPluginAsync = async (app) => {
       token,
       expiresAt,
       command: `glacierd pair --panel ${panel} --token ${token}`,
-      installCommand: `curl -sSL ${panel}/install.sh | sudo bash -s -- daemon --panel ${panel} --token ${token}`,
+      installCommand: `curl -fsSL ${panel}/install.sh | sudo bash -s -- daemon --panel ${panel} --token ${token}`,
     };
   }
 
