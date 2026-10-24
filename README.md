@@ -1,6 +1,6 @@
 # Glacier Panel
 
-A free, self-hosted game server panel in the spirit of Pterodactyl: install it on your own VPS or dedicated server and run game servers for yourself, your friends or your community. Written from scratch in TypeScript, with its own node daemon (`glacierd`), deep admin customization, power-user server tools and (soon) a one-line installer. Pterodactyl eggs (PTDL v1/v2) import as-is, and the bundled eggs export back to PTDL_v2.
+A free, self-hosted game server panel in the spirit of Pterodactyl: install it on your own VPS or dedicated server and run game servers for yourself, your friends or your community. Written from scratch in TypeScript, with its own node daemon (`glacierd`), deep admin customization, power-user server tools and a one-line installer. Pterodactyl eggs (PTDL v1/v2) import as-is, and the bundled eggs export back to PTDL_v2.
 
 ```
 apps/api       Panel API: Fastify 5, Prisma (PostgreSQL), Zod
@@ -21,9 +21,15 @@ packages/eggs    PTDL egg parser/exporter, variable rule validation, bundled egg
 | M4 Landing page builder, navigation editor, custom pages, SMTP + editable email templates, password reset, text overrides, sign-in & dashboard layouts | ✅ |
 | M5 Two-factor (TOTP + recovery codes, optional enforcement), passkeys, Discord/Google/GitHub login, scoped API keys, signed + Discord webhooks, announcements, admin IP allowlist | ✅ |
 | M6 Plugin & mod installer (Modrinth, Hangar, CurseForge), version switcher (Paper/Purpur/Vanilla/Fabric), player manager, resource history graphs, file search, Cloudflare subdomains + SRV, server templates | ✅ |
-| M7 Smart installer (`install.sh`), `glacier` CLI, Pterodactyl migration | ⏳ next |
+| M7 Smart installer (`installer/install.sh`) with `glacier update` ✅ · Pterodactyl migration ⏳ next | 🚧 |
 
 ## Installing on a server
+
+On a fresh Ubuntu 22.04/24.04 or Debian 12 server, with your domain pointing at it:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/BimuluDevelopment/glacier/main/installer/install.sh | sudo bash
+```
 
 See **[docs/install.md](docs/install.md)** for the full install guide: the panel and a node on one machine, adding more nodes, and optional extras (email, social sign-in, CurseForge, Cloudflare subdomains, MySQL). Templates for nginx, systemd and the database live in [deploy/](deploy/).
 

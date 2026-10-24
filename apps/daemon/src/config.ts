@@ -18,6 +18,8 @@ const configSchema = z.object({
     .object({
       host: z.string().default('0.0.0.0'),
       port: z.number().int().default(8080),
+      /** Hostname browsers use to reach this node, from pairing. The installer gets its certificate for it. */
+      fqdn: z.string().default(''),
       ssl: z
         .object({ enabled: z.boolean().default(false), cert: z.string().default(''), key: z.string().default('') })
         .prefault({}),

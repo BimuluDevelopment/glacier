@@ -56,7 +56,7 @@ async function pair() {
     uuid: data.nodeUuid,
     token: data.secret,
     panel: { url: data.panelUrl },
-    api: { port: data.daemonPort, uploadLimit: data.uploadSize },
+    api: { port: data.daemonPort, uploadLimit: data.uploadSize, fqdn: data.fqdn },
     sftp: { port: data.sftpPort },
     system: { dataDirectory: data.dataDirectory },
   });

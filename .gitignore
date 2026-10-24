@@ -11,3 +11,6 @@ apps/daemon/data/
 apps/daemon/config.yml
 playwright-report/
 test-results/
+
+# Installer build marker
+.glacier-build

@@ -5,13 +5,43 @@ Glacier Panel is free software you run on your own machines. It has two parts:
 - **The panel** is the website plus its API and a PostgreSQL database. You need one.
 - **Nodes** run **glacierd**, which starts game servers in Docker containers. You need at least one. The panel's machine can be a node too.
 
-This guide covers:
+## Quick install (recommended)
 
-- **Part A:** the panel and a node on one VPS or dedicated server. Most people only need this.
+Point your domain at the server (see [Before you start](#before-you-start)), then run this as root:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/BimuluDevelopment/glacier/main/installer/install.sh | sudo bash
+```
+
+The installer:
+
+1. Checks the machine (OS, RAM, disk, virtualisation, ports, DNS).
+2. Asks whether to install the panel, a node or both, then asks for your domain and an email for the certificate.
+3. Installs Node.js, Docker, PostgreSQL, nginx and a Let's Encrypt certificate, generates the secrets, builds Glacier Panel into `/opt/glacier` and starts everything as systemd services.
+
+For **panel and node** on one machine, it then waits for you to:
+
+1. Open the panel and finish the setup wizard.
+2. Create a node (Admin → Nodes → New node) with the panel's domain as its hostname.
+3. Paste the pairing command shown on the node page into the installer, which then sets up the node.
+
+**More nodes:** on each extra machine, paste the install command from that node's page in the panel. It looks like `curl -sSL https://panel.example.com/install.sh | sudo bash -s -- daemon --panel … --token …`.
+
+**Updating:** `sudo glacier update`
+
+Running the installer again is safe: it keeps your config, secrets, certificates and pairing. Everything it does is logged to `/var/log/glacier-install.log`. Run it with `--help` to see all options, for example `--no-ssl` for a home server without a domain, or `--yes` for unattended installs.
+
+After installing, add allocations (ports) to your node and create a server: see [step 9](#9-add-this-machine-as-a-node) and [step 11](#11-create-your-first-server).
+
+## Manual install
+
+The rest of this guide does the same thing by hand, for anyone who prefers that or runs an OS the installer doesn't support. It covers:
+
+- **Part A:** the panel and a node on one VPS or dedicated server.
 - **Part B:** adding more machines as nodes.
-- **Part C:** optional extras: email, social sign-in, plugin sources, subdomains and MySQL databases.
+- **Part C:** optional extras: email, social sign-in, plugin sources, subdomains and MySQL databases. These apply to installer setups too.
 
-Expect about 30 minutes for Part A. A one-line installer that automates all of this is on the way (milestone M7). Until it ships, the steps below are the way to install.
+Expect about 30 minutes for Part A.
 
 ---
 
@@ -182,7 +212,7 @@ Under **Admin → Nodes → New node**:
 | Memory / Disk | what game servers may use in total, e.g. total RAM minus 1.5 GB |
 | Server data directory | leave `/var/lib/glacier/volumes` |
 
-After **Create node**, the panel shows two commands. **Use the second one** (`glacierd pair …`). The first one is for the upcoming one-line installer, which doesn't exist yet. The pairing token works once and expires after an hour; **Re-pair daemon** on the node page makes a new one.
+After **Create node**, the panel shows two commands. For a manual install, use the second one (`glacierd pair …`); the first runs the installer. The pairing token works once and expires after an hour; **Re-pair daemon** on the node page makes a new one.
 
 Then, on the node page, add **allocations** (the addresses and ports game servers may use):
 
@@ -370,7 +400,15 @@ The panel tests the login before saving. Finally, give each server a database li
 
 ## Updating
 
-Get the new code the same way as [step 2](#2-get-the-code) (`git pull`, or extract a new archive over `/opt/glacier`), then:
+If you installed with the installer, or with `git clone`, run:
+
+```bash
+sudo glacier update
+```
+
+It downloads the latest code, rebuilds, updates the database and restarts whatever is installed on that machine. Run it on every machine.
+
+For an install from an uploaded archive, extract the new archive over `/opt/glacier`, then:
 
 ```bash
 cd /opt/glacier

@@ -170,6 +170,8 @@ export const oauthRoutes: FastifyPluginAsync = async (app) => {
     if (query.error || !query.code) return fail(reply, 'cancelled', entry.intent === 'link' ? linkPath : '/login');
 
     let profile: Profile;
+    // Provider error codes we can explain (GitHub answers HTTP 200 with an "error" field).
+    let reason = 'provider_error';
     try {
       const config = (await getOAuthConfig())[provider];
       const def = PROVIDERS[provider];
@@ -186,12 +188,17 @@ export const oauthRoutes: FastifyPluginAsync = async (app) => {
         }),
         signal: AbortSignal.timeout(10_000),
       });
-      const token = (await res.json()) as { access_token?: string; error?: string };
-      if (!res.ok || !token.access_token) throw new Error(token.error ?? `token endpoint answered HTTP ${res.status}`);
+      const token = (await res.json()) as { access_token?: string; error?: string; error_description?: string };
+      if (!res.ok || !token.access_token) {
+        if (token.error === 'bad_verification_code' || token.error === 'invalid_grant') reason = 'code_expired';
+        else if (token.error === 'incorrect_client_credentials' || token.error === 'invalid_client' || token.error === 'unauthorized_client') reason = 'bad_credentials';
+        else if (token.error === 'redirect_uri_mismatch') reason = 'redirect_mismatch';
+        throw new Error(token.error_description ?? token.error ?? `token endpoint answered HTTP ${res.status}`);
+      }
       profile = await def.profile(token.access_token);
     } catch (err) {
-      req.log.warn({ err, provider }, 'oauth exchange failed');
-      return fail(reply, 'provider_error', entry.intent === 'link' ? linkPath : '/login');
+      req.log.warn({ err, provider, reason }, 'oauth exchange failed');
+      return fail(reply, reason, entry.intent === 'link' ? linkPath : '/login');
     }
 
     const linked = await prisma.oAuthAccount.findUnique({ where: { provider_providerUserId: { provider, providerUserId: profile.id } }, include: { user: true } });

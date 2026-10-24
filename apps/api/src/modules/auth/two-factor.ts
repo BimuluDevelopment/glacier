@@ -28,18 +28,24 @@ export function issueLoginTicket(userId: string): string {
   return ticket;
 }
 
-/** Check a TOTP or recovery code for a user, consuming it so it can't be used again. */
-export async function consumeSecondFactor(user: User, code: string, decrypt: (v: string) => string): Promise<'totp' | 'recovery' | null> {
+/**
+ * Check a TOTP or recovery code for a user, consuming it so it can't be used again. "reused" is
+ * a correct authenticator code that was already spent (e.g. signing in twice within 30 seconds),
+ * which deserves a different message than a wrong one.
+ */
+export async function consumeSecondFactor(user: User, code: string, decrypt: (v: string) => string): Promise<'totp' | 'recovery' | 'reused' | null> {
   if (user.totpEnabled && user.totpSecret) {
-    const step = verifyTotp(decrypt(user.totpSecret), code, { lastStep: user.totpLastStep });
+    const secret = decrypt(user.totpSecret);
+    const step = verifyTotp(secret, code, { lastStep: user.totpLastStep });
     if (step !== null) {
       // Conditional update: two concurrent requests with the same code can't both win.
       const { count } = await prisma.user.updateMany({
         where: { id: user.id, OR: [{ totpLastStep: null }, { totpLastStep: { lt: step } }] },
         data: { totpLastStep: step },
       });
-      return count ? 'totp' : null;
+      return count ? 'totp' : 'reused';
     }
+    if (verifyTotp(secret, code) !== null) return 'reused';
   }
   const normalized = normalizeRecoveryCode(code);
   if (normalized.length === 12) {
@@ -47,6 +53,15 @@ export async function consumeSecondFactor(user: User, code: string, decrypt: (v:
     if (count) return 'recovery';
   }
   return null;
+}
+
+function rejectSecondFactor(result: 'reused' | null): never {
+  if (result === 'reused') {
+    throw unprocessable('That code was already used. Wait for the next code in your authenticator app (it changes every 30 seconds) and enter that one.', [
+      { path: 'code', message: 'Code already used, wait for the next one' },
+    ]);
+  }
+  throw unprocessable('That code is not valid. Check the time on your phone and try again.', [{ path: 'code', message: 'Invalid code' }]);
 }
 
 async function storeRecoveryCodes(userId: string): Promise<string[]> {
@@ -71,10 +86,10 @@ export const twoFactorLoginRoutes: FastifyPluginAsync = async (app) => {
     }
     const user = await prisma.user.findUniqueOrThrow({ where: { id: entry.userId } });
     const method = await consumeSecondFactor(user, code, (v) => app.encrypter.decrypt(v));
-    if (!method) {
+    if (method !== 'totp' && method !== 'recovery') {
       if (++entry.attempts >= TICKET_MAX_ATTEMPTS) tickets.delete(ticket);
-      await logActivity(req, 'auth:2fa.failed', { actorId: user.id });
-      throw unprocessable('That code is not valid.', [{ path: 'code', message: 'Invalid code' }]);
+      await logActivity(req, 'auth:2fa.failed', { actorId: user.id, properties: { reason: method ?? 'invalid' } });
+      rejectSecondFactor(method);
     }
     tickets.delete(ticket);
     await startSession(req, reply, user);
@@ -134,9 +149,8 @@ export const twoFactorAccountRoutes: FastifyPluginAsync = async (app) => {
     const user = req.user!;
     if (!user.totpEnabled) throw conflict('Two-factor authentication is already off.');
     if (!(await verifyPassword(user.passwordHash, password))) throw unprocessable('Incorrect password.', [{ path: 'password', message: 'Incorrect password' }]);
-    if (!(await consumeSecondFactor(user, code, (v) => app.encrypter.decrypt(v)))) {
-      throw unprocessable('That code is not valid.', [{ path: 'code', message: 'Invalid code' }]);
-    }
+    const method = await consumeSecondFactor(user, code, (v) => app.encrypter.decrypt(v));
+    if (method !== 'totp' && method !== 'recovery') rejectSecondFactor(method);
     await prisma.$transaction([
       prisma.user.update({ where: { id: user.id }, data: { totpEnabled: false, totpSecret: null, totpLastStep: null } }),
       prisma.recoveryCode.deleteMany({ where: { userId: user.id } }),
